@@ -1,0 +1,24 @@
+{
+  "name": "primipilus/daemon",
+  "description": "base daemon",
+  "keywords": [
+    "daemon"
+  ],
+  "homepage": "https://github.com/primipilus/daemon",
+  "type": "library",
+  "license": "mit",
+  "authors": [
+    {
+      "name": "primipilus",
+      "email": "primipilus13@gmail.com"
+    }
+  ],
+  "require": {
+    "php": ">=7.1.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "primipilus\\daemon\\": "src/"
+    }
+  }
+}

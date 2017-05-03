@@ -1,0 +1,5 @@
+/demo               export-ignore
+/doc                export-ignore
+/tests              export-ignore
+/.gitattributes     export-ignore
+/.gitignore         export-ignore
