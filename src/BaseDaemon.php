@@ -95,7 +95,10 @@ abstract class BaseDaemon
      */
     public function getPidFile() : string
     {
-        return $this->getRuntimeDir() . '/' . $this->getName() . '.pid';
+        if (is_null($this->_pidFile)) {
+            $this->_pidFile = $this->getRuntimeDir() . '/' . $this->getName() . '.pid';
+        }
+        return $this->_pidFile;
     }
 
     /**
