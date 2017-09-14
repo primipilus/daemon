@@ -159,7 +159,7 @@ abstract class BaseDaemon
     /**
      * @param int $dirPermissions
      */
-    public function setDirPermissions(int $dirPermissions)
+    public function setDirPermissions(int $dirPermissions) : void
     {
         $this->_dirPermissions = $dirPermissions;
     }
@@ -195,7 +195,7 @@ abstract class BaseDaemon
         if ($this->fork()) {
             $this->end();
         }
-        $this->setPid(getmypid());
+        $this->setPid((int)getmypid());
         if (!$this->getPid()) {
             throw new FailureGetPidException();
         }
@@ -257,18 +257,20 @@ abstract class BaseDaemon
     }
 
     /**
-     * @param $pid
+     * @param int $pid
      * @param int $attempts
      *
      * @return bool
      */
-    public function stopPid($pid, $attempts = 50) : bool
+    public function stopPid(int $pid, int $attempts = 50) : bool
     {
-        for ($k = $attempts; $k || !$attempts; $k--) {
-            if (!posix_kill($pid, SIGTERM)) {
-                return true;
+        if ($pid > 0) {
+            for ($k = $attempts; $k || !$attempts; $k--) {
+                if (!posix_kill($pid, SIGTERM)) {
+                    return true;
+                }
+                sleep(1);
             }
-            sleep(1);
         }
         return false;
     }
@@ -315,12 +317,17 @@ abstract class BaseDaemon
      */
     protected function savePid() : void
     {
-        if ($handle = fopen($this->getPidFile(), 'w')) {
-            if (!fwrite($handle, $this->getPid())) {
-                fclose($handle);
-                throw new FailureWritePidFileException();
+        if ($handle = @fopen($this->getPidFile(), 'w')) {
+            if (@flock($handle, LOCK_EX)) {
+                $result = @fwrite($handle, $this->getPid());
+                @flock($handle, LOCK_UN);
+                if ($result) {
+                    @fclose($handle);
+                    return;
+                }
             }
-            fclose($handle);
+            @fclose($handle);
+            throw new FailureWritePidFileException();
         } else {
             throw new FailureOpenPidFileException();
         }
@@ -357,7 +364,7 @@ abstract class BaseDaemon
     }
 
     /**
-     * @param int $signo
+     * @param int   $signo
      * @param mixed $signinfo
      */
     protected function signalHandler(int $signo, $signinfo) : void
@@ -413,7 +420,7 @@ abstract class BaseDaemon
     /**
      * set process as main process
      */
-    protected function setMainProcess()
+    protected function setMainProcess() : void
     {
         posix_setsid();
     }
