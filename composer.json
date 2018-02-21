@@ -6,7 +6,7 @@
   ],
   "homepage": "https://github.com/primipilus/daemon",
   "type": "library",
-  "license": "mit",
+  "license": "MIT",
   "authors": [
     {
       "name": "primipilus",
