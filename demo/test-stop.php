@@ -1,7 +1,4 @@
 <?php
-/**
- * @author primipilus 03.05.2017
- */
 
 require __DIR__ . '/../vendor/autoload.php';
 

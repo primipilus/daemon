@@ -1,11 +1,7 @@
 <?php
-/**
- * @author primipilus 03.05.2017
- */
 
 namespace primipilus\daemon;
 
-use primipilus\daemon\exceptions\BaseException;
 use primipilus\daemon\exceptions\DaemonAlreadyRunException;
 use primipilus\daemon\exceptions\DaemonNotActiveException;
 use primipilus\daemon\exceptions\FailureForkProcessException;
@@ -31,22 +27,31 @@ abstract class BaseDaemon
 {
 
     /** @var bool */
-    protected $_stopProcess = false;
+    protected $stopProcess = false;
     /** @var string */
-    protected $_pidFile;
+    protected $pidFile;
     /** @var int */
-    protected $_pid = 0;
+    protected $pid = 0;
     /** @var bool */
-    protected $_daemonize = true;
+    protected $daemonize = true;
     /** @var string */
-    protected $_runtimeDir;
+    protected $runtimeDir;
     /** @var string */
-    protected $_name;
+    protected $name;
     /** @var int */
-    protected $_dirPermissions = 0775;
+    protected $dirPermissions = 0775;
+    /** @var int */
+    protected $exitStatus = 0;
+    /** @var array  */
+    protected $childProcesses = [];
+    /** @var int */
+    protected $childLimit = 1;
 
-    abstract protected function process() : void;
-
+    /**
+     * BaseDaemon constructor.
+     * @param array $options
+     * @throws InvalidOptionException
+     */
     public function __construct($options = [])
     {
         foreach ($options as $option => $value) {
@@ -62,90 +67,118 @@ abstract class BaseDaemon
     /**
      * @return bool
      */
-    public function getDaemonize() : bool
+    public function daemonize() : bool
     {
-        return $this->_daemonize;
+        return $this->daemonize;
     }
 
     /**
-     * @return string
-     * @throws BaseException
+     * @throws DaemonAlreadyRunException
+     * @throws DaemonNotActiveException
+     * @throws FailureForkProcessException
+     * @throws FailureGetPidException
+     * @throws FailureGetPidFileException
+     * @throws FailureOpenPidFileException
+     * @throws FailureStopException
+     * @throws FailureWritePidFileException
+     * @throws InvalidOptionException
      */
-    public function getRuntimeDir() : string
+    public function restart() : void
     {
-        if (is_null($this->_runtimeDir)) {
-            throw new BaseException();
-        }
-        return $this->_runtimeDir;
+        $this->stop();
+        $this->start();
     }
 
     /**
-     * @return string
+     * @return bool
+     * @throws DaemonNotActiveException
+     * @throws FailureGetPidFileException
+     * @throws FailureStopException
+     * @throws InvalidOptionException
      */
-    public function getName() : string
+    public function stop() : bool
     {
-        if (is_null($this->_name)) {
-            $this->_name = implode('.', array_reverse(explode('\\', static::class)));
+        if ($this->isActive()) {
+            if ($this->stopPid($this->pid())) {
+                return true;
+            }
+            throw new FailureStopException('pid: ' . $this->pid());
+        } else {
+            throw new DaemonNotActiveException('Daemon ' . $this->name() . ' not active');
         }
-        return $this->_name;
     }
 
     /**
-     * @return string
+     * @return bool
+     * @throws FailureGetPidFileException
+     * @throws InvalidOptionException
      */
-    public function getPidFile() : string
+    final private function isActive() : bool
     {
-        if (is_null($this->_pidFile)) {
-            $this->_pidFile = $this->getRuntimeDir() . '/' . $this->getName() . '.pid';
+        if (!$this->pid()) {
+            if (file_exists($this->pidFile())) {
+                $this->setPidFromPidFile();
+                if (!$this->pid()) {
+                    throw new FailureGetPidFileException();
+                }
+            }
         }
-        return $this->_pidFile;
+        if ($this->pid() && posix_kill($this->pid(), 0)) {
+            return true;
+        }
+        return false;
     }
 
     /**
      * @return int
      */
-    public function getPid() : int
+    public function pid() : int
     {
-        return $this->_pid;
+        return $this->pid;
     }
 
     /**
-     * @return int
+     * @return string
+     * @throws InvalidOptionException
      */
-    public function getDirPermissions() : int
+    public function pidFile() : string
     {
-        return $this->_dirPermissions;
-    }
-
-    /**
-     * @param bool $daemonize
-     */
-    protected function setDaemonize(bool $daemonize) : void
-    {
-        $this->_daemonize = $daemonize;
-    }
-
-    /**
-     * @param string $runtimeDir
-     */
-    protected function setRuntimeDir(string $runtimeDir) : void
-    {
-        $this->_runtimeDir = rtrim($runtimeDir, '/');
-
-        if (!file_exists($this->_runtimeDir)) {
-            $mask = umask();
-            umask(0);
-            mkdir($this->_runtimeDir, $this->getDirPermissions(), true);
-            umask($mask);
+        if (is_null($this->pidFile)) {
+            $this->pidFile = $this->runtimeDir() . '/' . $this->name() . '.pid';
         }
+        return $this->pidFile;
     }
 
     /**
-     * @param string $name
+     * @return string
+     * @throws InvalidOptionException
      */
-    protected function setName(string $name) : void
+    public function runtimeDir() : string
     {
-        $this->_name = $name;
+        if (is_null($this->runtimeDir)) {
+            throw new InvalidOptionException('option runtimeDir is invalid');
+        }
+        return $this->runtimeDir;
+    }
+
+    /**
+     * @return string
+     */
+    public function name() : string
+    {
+        if (is_null($this->name)) {
+            $this->name = implode('.', array_reverse(explode('\\', static::class)));
+        }
+        return $this->name;
+    }
+
+    /**
+     * @throws InvalidOptionException
+     */
+    protected function setPidFromPidFile() : void
+    {
+        $pid = file_get_contents($this->pidFile());
+        $this->setPid($pid);
     }
 
     /**
@@ -153,36 +186,42 @@ abstract class BaseDaemon
      */
     protected function setPid(int $pid) : void
     {
-        $this->_pid = $pid;
+        $this->pid = $pid;
     }
 
     /**
-     * @param int $dirPermissions
+     * @param int $pid
+     * @param int $attempts
+     * @return bool
      */
-    public function setDirPermissions(int $dirPermissions) : void
+    public function stopPid(int $pid, int $attempts = 50) : bool
     {
-        $this->_dirPermissions = $dirPermissions;
-    }
-
-    /**
-     * @return string
-     */
-    public function getErrorLog() : string
-    {
-        return $this->getRuntimeDir() . '/' . $this->getName() . '-error.log';
+        if ($pid > 0) {
+            for ($k = $attempts; $k || !$attempts; $k--) {
+                if (!posix_kill($pid, SIGTERM)) {
+                    return true;
+                }
+                sleep(1);
+            }
+        }
+        return false;
     }
 
     /**
      * @throws DaemonAlreadyRunException
+     * @throws FailureForkProcessException
      * @throws FailureGetPidException
-     * @throws BaseException
+     * @throws FailureGetPidFileException
+     * @throws FailureOpenPidFileException
+     * @throws FailureWritePidFileException
+     * @throws InvalidOptionException
      */
     public function start() : void
     {
         if ($this->isActive()) {
             throw new DaemonAlreadyRunException();
         }
-        if (!$this->_daemonize) {
+        if (!$this->daemonize) {
             $this->process();
             $this->afterStop();
             $this->end();
@@ -196,7 +235,7 @@ abstract class BaseDaemon
             $this->end();
         }
         $this->setPid((int)getmypid());
-        if (!$this->getPid()) {
+        if (!$this->pid()) {
             throw new FailureGetPidException();
         }
         $this->savePid();
@@ -223,103 +262,56 @@ abstract class BaseDaemon
         $this->end();
     }
 
-    /**
-     *
-     */
-    protected function setErrorLog() : void
-    {
-        ini_set('error_log', $this->getErrorLog());
-    }
+    abstract protected function process() : void;
 
     /**
-     * @param mixed $message
-     */
-    protected function putErrorLog($message) : void
-    {
-        file_put_contents($this->getErrorLog(), (string)$message, FILE_APPEND);
-    }
-
-    /**
-     * @return bool
-     * @throws FailureStopException
-     * @throws BaseException
-     */
-    public function stop() : bool
-    {
-        if ($this->isActive()) {
-            if ($this->stopPid($this->getPid())) {
-                return true;
-            }
-            throw new FailureStopException('pid: ' . $this->getPid());
-        } else {
-            throw new DaemonNotActiveException('Daemon ' . $this->getName() . ' not active');
-        }
-    }
-
-    /**
-     * @param int $pid
-     * @param int $attempts
-     *
-     * @return bool
-     */
-    public function stopPid(int $pid, int $attempts = 50) : bool
-    {
-        if ($pid > 0) {
-            for ($k = $attempts; $k || !$attempts; $k--) {
-                if (!posix_kill($pid, SIGTERM)) {
-                    return true;
-                }
-                sleep(1);
-            }
-        }
-        return false;
-    }
-
-    public function restart() : void
-    {
-        $this->stop();
-        $this->start();
-    }
-
-    /**
-     * @return bool
-     * @throws FailureGetPidFileException
-     * @throws BaseException
-     */
-    final private function isActive() : bool
-    {
-        if (!$this->getPid()) {
-            if (file_exists($this->getPidFile())) {
-                $this->setPidFromPidFile();
-                if (!$this->getPid()) {
-                    throw new FailureGetPidFileException();
-                }
-            }
-        }
-        if ($this->getPid() && posix_kill($this->getPid(), 0)) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * Действие после остановки
-     * Если необнодим - надо переобпределить в потомке
+     * action after daemon stop
      */
     protected function afterStop() : void
     {
     }
 
     /**
+     * end of process
+     */
+    protected function end() : void
+    {
+        exit($this->exitStatus);
+    }
+
+    /**
+     * @return int
+     * @throws FailureForkProcessException
+     */
+    final protected function fork() : int
+    {
+        $child_pid = pcntl_fork();
+        if (-1 == $child_pid) {
+            throw new FailureForkProcessException();
+        }
+        return $child_pid;
+    }
+
+
+
+    protected function forkChild()
+    {
+        $this->putErrorLog($this->pid());
+        $pid = $this->fork();
+        $this->putErrorLog($pid);
+//        $this->setPid($pid);
+    }
+
+    /**
      * @throws FailureOpenPidFileException
      * @throws FailureWritePidFileException
-     * @throws BaseException
+     * @throws InvalidOptionException
      */
     protected function savePid() : void
     {
-        if ($handle = @fopen($this->getPidFile(), 'w')) {
+        if ($handle = @fopen($this->pidFile(), 'w')) {
             if (@flock($handle, LOCK_EX)) {
-                $result = @fwrite($handle, $this->getPid());
+                $result = @fwrite($handle, $this->pid());
                 @flock($handle, LOCK_UN);
                 if ($result) {
                     @fclose($handle);
@@ -334,17 +326,28 @@ abstract class BaseDaemon
     }
 
     /**
-     * @return int
-     * @throws FailureForkProcessException
-     * @throws BaseException
+     * set process as main process
      */
-    final protected function fork() : int
+    protected function setMainProcess() : void
     {
-        $child_pid = pcntl_fork();
-        if (-1 == $child_pid) {
-            throw new FailureForkProcessException();
-        }
-        return $child_pid;
+        posix_setsid();
+    }
+
+    /**
+     * @throws InvalidOptionException
+     */
+    protected function setErrorLog() : void
+    {
+        ini_set('error_log', $this->errorLog());
+    }
+
+    /**
+     * @return string
+     * @throws InvalidOptionException
+     */
+    public function errorLog() : string
+    {
+        return $this->runtimeDir() . '/' . $this->name() . '-error.log';
     }
 
     /**
@@ -360,20 +363,7 @@ abstract class BaseDaemon
      */
     public function isStopProcess() : bool
     {
-        return $this->_stopProcess;
-    }
-
-    /**
-     * @param int   $signo
-     * @param mixed $signinfo
-     */
-    protected function signalHandler(int $signo, $signinfo) : void
-    {
-        switch ($signo) {
-            case SIGTERM:
-                $this->stopProcess();
-                break;
-        }
+        return $this->stopProcess;
     }
 
     /**
@@ -385,44 +375,96 @@ abstract class BaseDaemon
     }
 
     /**
-     *
+     * @param mixed $message
+     * @throws InvalidOptionException
      */
-    protected function stopProcess() : void
+    protected function putErrorLog($message) : void
     {
-        $this->_stopProcess = true;
-    }
-
-    /**
-     *
-     */
-    protected function setPidFromPidFile() : void
-    {
-        $pid = file_get_contents($this->getPidFile());
-        $this->setPid($pid);
-    }
-
-    /**
-     * end of process
-     */
-    protected function end() : void
-    {
-        exit();
+        file_put_contents($this->errorLog(), (string)$message . PHP_EOL, FILE_APPEND);
     }
 
     /**
      * remove file with pid
+     * @throws InvalidOptionException
      */
     protected function removePidFile() : void
     {
-        @unlink($this->getPidFile());
+        @unlink($this->pidFile());
     }
 
     /**
-     * set process as main process
+     * @param int $dirPermissions
      */
-    protected function setMainProcess() : void
+    public function setDirPermissions(int $dirPermissions) : void
     {
-        posix_setsid();
+        $this->dirPermissions = $dirPermissions;
     }
 
+    /**
+     * @param bool $daemonize
+     */
+    protected function setDaemonize(bool $daemonize) : void
+    {
+        $this->daemonize = $daemonize;
+    }
+
+    /**
+     * @param string $runtimeDir
+     */
+    protected function setRuntimeDir(string $runtimeDir) : void
+    {
+        $this->runtimeDir = rtrim($runtimeDir, '/');
+
+        if (!file_exists($this->runtimeDir)) {
+            $mask = umask();
+            umask(0);
+            mkdir($this->runtimeDir, $this->dirPermissions(), true);
+            umask($mask);
+        }
+    }
+
+    /**
+     * @return int
+     */
+    public function dirPermissions() : int
+    {
+        return $this->dirPermissions;
+    }
+
+    /**
+     * @param string $name
+     */
+    protected function setName(string $name) : void
+    {
+        $this->name = $name;
+    }
+
+    /**
+     * @param int $exitStatus
+     */
+    protected function setExitStatus(int $exitStatus) : void
+    {
+        $this->exitStatus = $exitStatus;
+    }
+
+    /**
+     * @param int   $signalNumber
+     * @param mixed $signalInfo
+     */
+    protected function signalHandler(int $signalNumber, $signalInfo) : void
+    {
+        switch ($signalNumber) {
+            case SIGTERM:
+                $this->stopProcess();
+                break;
+        }
+    }
+
+    /**
+     *
+     */
+    protected function stopProcess() : void
+    {
+        $this->stopProcess = true;
+    }
 }
