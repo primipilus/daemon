@@ -43,11 +43,13 @@ abstract class BaseDaemon
     /** @var int */
     protected $exitStatus = 0;
     /** @var int */
-    protected $poolSize = 2;
-    /** @var ProcessDetailsCollection */
-    protected $processes;
+    private $poolSize = 0;
+    /** @var ProcessCollection */
+    private $processes;
     /** @var bool */
-    protected $parent = true;
+    private $parent = true;
+    /** @var  */
+    private $childNumber;
 
     /**
      * BaseDaemon constructor.
@@ -64,7 +66,7 @@ abstract class BaseDaemon
                 throw new InvalidOptionException('option ' . $option . ' is invalid');
             }
         }
-        $this->processes = new ProcessDetailsCollection();
+        $this->processes = new ProcessCollection($this->poolSize);
     }
 
     /**
@@ -412,7 +414,7 @@ abstract class BaseDaemon
         if ($pid === 0) {
             $this->parent = false;
         } else {
-            $this->processes->addProcess(new ProcessDetails($this->processes->getNextId(), $pid));
+            $this->processes->add(new Process($this->processes->getNextId(), $pid));
         }
     }
 
@@ -484,7 +486,7 @@ abstract class BaseDaemon
      */
     protected function stopProcess() : void
     {
-        if ($this->isParent() and count($this->processes->getProcessDetails()) > 0) {
+        if ($this->isParent() and count($this->processes->getElements()) > 0) {
             $this->poolSize = 0;
             $this->stopProcess = $this->killAllChildrenProcesses();
         }
@@ -495,10 +497,10 @@ abstract class BaseDaemon
      */
     protected function killAllChildrenProcesses() : bool
     {
-        foreach ($this->processes->getProcessDetails() as $processDetails) {
+        foreach ($this->processes->getElements() as $processDetails) {
             while (true) {
                 if (posix_kill($processDetails->pid(), SIGTERM)) {
-                    $this->processes->remove($processDetails->pid());
+                    $this->processes->removeByPid($processDetails->pid());
                     break;
                 }
                 sleep(1);
@@ -514,7 +516,7 @@ abstract class BaseDaemon
     {
         $childPid = pcntl_waitpid(-1, $status, WNOHANG);
         while ($childPid > 0) {
-            $this->processes->remove($childPid);
+            $this->processes->removeByPid($childPid);
             $childPid = pcntl_waitpid(-1, $status, WNOHANG);
         }
     }

@@ -10,13 +10,13 @@ class TestChildDaemon extends \primipilus\daemon\BaseDaemon
     protected function process() : void
     {
         if ($this->isParent()) {
-            if (count($this->processes->getProcessDetails()) < $this->poolSize) {
+            if (count($this->processes->getElements()) < $this->poolSize) {
                 $this->forkChild();
             }
             sleep(1);
         } else {
             for ($i = 0; $i < 3000; $i++) {
-                sqrt($i * rand(1000, 10000) - rand(1000, 10000) + count($this->processes->getProcessDetails()));
+                sqrt($i * rand(1000, 10000) - rand(1000, 10000) + count($this->processes->getElements()));
             }
             if (rand(1, 100) >= 99) {
                 throw new \Exception();

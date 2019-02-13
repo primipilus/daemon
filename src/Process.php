@@ -7,7 +7,7 @@ namespace primipilus\daemon;
  *
  * @package primipilus\daemon
  */
-class ProcessDetails
+final class Process
 {
     /** @var int */
     protected $id;
