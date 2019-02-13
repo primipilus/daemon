@@ -9,7 +9,7 @@ namespace primipilus\daemon;
  */
 class ProcessDetails
 {
-    /** @var int  */
+    /** @var int */
     protected $id;
     /** @var int process id pid */
     protected $pid;

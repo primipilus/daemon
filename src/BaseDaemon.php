@@ -260,7 +260,7 @@ abstract class BaseDaemon
             $this->putErrorLog($e);
         }
         $this->afterStop();
-        if($this->isParent()){
+        if ($this->isParent()) {
             $this->removePidFile();
         }
         $this->end();
@@ -294,27 +294,6 @@ abstract class BaseDaemon
             throw new FailureForkProcessException();
         }
         return $processId;
-    }
-
-    /**
-     * @throws FailureForkProcessException
-     */
-    protected function forkChild()
-    {
-        $pid = $this->fork();
-        if($pid === 0){
-            $this->parent = false;
-        }else{
-            $this->processes->addProcess(new ProcessDetails($this->processes->getNextId(), $pid));
-        }
-    }
-
-    /**
-     * @return bool
-     */
-    public function isParent(): bool
-    {
-        return $this->parent;
     }
 
     /**
@@ -400,6 +379,14 @@ abstract class BaseDaemon
     }
 
     /**
+     * @return bool
+     */
+    public function isParent() : bool
+    {
+        return $this->parent;
+    }
+
+    /**
      * remove file with pid
      * @throws InvalidOptionException
      */
@@ -414,6 +401,19 @@ abstract class BaseDaemon
     public function setDirPermissions(int $dirPermissions) : void
     {
         $this->dirPermissions = $dirPermissions;
+    }
+
+    /**
+     * @throws FailureForkProcessException
+     */
+    protected function forkChild()
+    {
+        $pid = $this->fork();
+        if ($pid === 0) {
+            $this->parent = false;
+        } else {
+            $this->processes->addProcess(new ProcessDetails($this->processes->getNextId(), $pid));
+        }
     }
 
     /**
@@ -464,16 +464,6 @@ abstract class BaseDaemon
     }
 
     /**
-     */
-    protected function removeChildProcess() {
-        $childPid = pcntl_waitpid(-1, $status, WNOHANG);
-        while ($childPid > 0) {
-            $this->processes->remove($childPid);
-            $childPid = pcntl_waitpid(-1, $status, WNOHANG);
-        }
-    }
-
-    /**
      * @param int   $signalNumber
      * @param mixed $signalInfo
      */
@@ -494,7 +484,7 @@ abstract class BaseDaemon
      */
     protected function stopProcess() : void
     {
-        if($this->isParent() and count($this->processes->getProcessDetails()) > 0){
+        if ($this->isParent() and count($this->processes->getProcessDetails()) > 0) {
             $this->poolSize = 0;
             $this->stopProcess = $this->killAllChildrenProcesses();
         }
@@ -516,5 +506,16 @@ abstract class BaseDaemon
         }
 
         return true;
+    }
+
+    /**
+     */
+    protected function removeChildProcess()
+    {
+        $childPid = pcntl_waitpid(-1, $status, WNOHANG);
+        while ($childPid > 0) {
+            $this->processes->remove($childPid);
+            $childPid = pcntl_waitpid(-1, $status, WNOHANG);
+        }
     }
 }

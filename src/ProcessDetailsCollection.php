@@ -14,28 +14,20 @@ class ProcessDetailsCollection
     public $processDetails = [];
 
     /**
-     * @return ProcessDetails[]
-     */
-    public function getProcessDetails(): array
-    {
-        return $this->processDetails;
-    }
-
-    /**
      * @param ProcessDetails $processDetails
      */
-    public function addProcess(ProcessDetails $processDetails): void
+    public function addProcess(ProcessDetails $processDetails) : void
     {
         $this->processDetails[] = $processDetails;
     }
 
-    public function getNextId(): int
+    public function getNextId() : int
     {
         $i = 0;
-        foreach ($this->getProcessDetails() as $processDetail){
-            if((++$i) != $processDetail->id()){
+        foreach ($this->getProcessDetails() as $processDetail) {
+            if ((++$i) != $processDetail->id()) {
                 return $i;
-            }else{
+            } else {
                 continue;
             }
         }
@@ -43,9 +35,17 @@ class ProcessDetailsCollection
     }
 
     /**
+     * @return ProcessDetails[]
+     */
+    public function getProcessDetails() : array
+    {
+        return $this->processDetails;
+    }
+
+    /**
      * @param int $pid
      */
-    public function remove(int $pid): void
+    public function remove(int $pid) : void
     {
         foreach ($this->processDetails as $key => $processDetail) {
             if ($processDetail->pid() === $pid) {
@@ -54,7 +54,7 @@ class ProcessDetailsCollection
         }
     }
 
-    public function getPids(): array
+    public function getPids() : array
     {
         $pids = [];
         foreach ($this->getProcessDetails() as $processDetail) {
@@ -62,5 +62,4 @@ class ProcessDetailsCollection
         }
         return $pids;
     }
-
 }

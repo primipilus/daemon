@@ -2,7 +2,6 @@
 
 namespace test\test;
 
-
 class TestDaemon extends \primipilus\daemon\BaseDaemon
 {
     protected function process() : void
