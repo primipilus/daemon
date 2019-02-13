@@ -45,7 +45,7 @@ abstract class BaseDaemon
     /** @var int */
     protected $poolSize = 2;
     /** @var ProcessDetailsCollection */
-    protected $processes = [];
+    protected $processes;
     /** @var bool */
     protected $parent = true;
 
@@ -500,6 +500,9 @@ abstract class BaseDaemon
         }
     }
 
+    /**
+     * @return bool
+     */
     protected function killAllChildrenProcesses() : bool
     {
         foreach ($this->processes->getProcessDetails() as $processDetails) {
