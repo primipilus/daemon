@@ -30,8 +30,6 @@ abstract class BaseDaemon
     protected $stopProcess = false;
     /** @var string */
     protected $pidFile;
-    /** @var string */
-    protected $pidChildrenFile;
     /** @var int */
     protected $pid = 0;
     /** @var bool */
@@ -103,9 +101,8 @@ abstract class BaseDaemon
      */
     public function stop() : bool
     {
-        $this->setProcessFromPidFile();
         if ($this->isActive()) {
-            if ($this->killAllChildrenProcesses() && $this->stopPid($this->pid())) {
+            if ($this->stopPid($this->pid())) {
                 return true;
             }
             throw new FailureStopException('pid: ' . $this->pid());
@@ -155,19 +152,6 @@ abstract class BaseDaemon
         return $this->pidFile;
     }
 
-
-    /**
-     * @return string
-     * @throws InvalidOptionException
-     */
-    public function pidChildrenFile() : string
-    {
-        if (is_null($this->pidChildrenFile)) {
-            $this->pidChildrenFile = $this->runtimeDir() . '/' . $this->name() . 'Children.pid';
-        }
-        return $this->pidChildrenFile;
-    }
-
     /**
      * @return string
      * @throws InvalidOptionException
@@ -198,18 +182,6 @@ abstract class BaseDaemon
     {
         $pid = file_get_contents($this->pidFile());
         $this->setPid($pid);
-    }
-
-    /**
-     * @throws InvalidOptionException
-     */
-    protected function setProcessFromPidFile() : void
-    {
-        $pid = file_get_contents($this->pidChildrenFile());
-        $i = 0;
-        foreach (explode(',', $pid) as $item){
-            $this->processes->addProcess(new ProcessDetails(++$i,  $item));
-        }
     }
 
     /**
@@ -289,7 +261,6 @@ abstract class BaseDaemon
         }
         $this->afterStop();
         if($this->isParent()){
-            $this->removePidChildrenFile();
             $this->removePidFile();
         }
         $this->end();
@@ -327,21 +298,15 @@ abstract class BaseDaemon
 
     /**
      * @throws FailureForkProcessException
-     * @throws FailureOpenPidFileException
-     * @throws FailureWritePidFileException
-     * @throws InvalidOptionException
      */
     protected function forkChild()
     {
-        $this->putErrorLog($this->pid());
         $pid = $this->fork();
         if($pid === 0){
             $this->parent = false;
         }else{
             $this->processes->addProcess(new ProcessDetails($this->processes->getNextId(), $pid));
-            $this->saveChildrenPid();
         }
-        $this->putErrorLog($pid);
     }
 
     /**
@@ -362,29 +327,6 @@ abstract class BaseDaemon
         if ($handle = @fopen($this->pidFile(), 'w')) {
             if (@flock($handle, LOCK_EX)) {
                 $result = @fwrite($handle, $this->pid());
-                @flock($handle, LOCK_UN);
-                if ($result) {
-                    @fclose($handle);
-                    return;
-                }
-            }
-            @fclose($handle);
-            throw new FailureWritePidFileException();
-        } else {
-            throw new FailureOpenPidFileException();
-        }
-    }
-
-    /**
-     * @throws FailureOpenPidFileException
-     * @throws FailureWritePidFileException
-     * @throws InvalidOptionException
-     */
-    protected function saveChildrenPid() : void
-    {
-        if ($handle = @fopen($this->pidChildrenFile(), 'w')) {
-            if (@flock($handle, LOCK_EX)) {
-                $result = @fwrite($handle, implode(',', $this->processes->getPids()));
                 @flock($handle, LOCK_UN);
                 if ($result) {
                     @fclose($handle);
@@ -467,15 +409,6 @@ abstract class BaseDaemon
     }
 
     /**
-     * remove file with pid
-     * @throws InvalidOptionException
-     */
-    protected function removePidChildrenFile() : void
-    {
-        @unlink($this->pidChildrenFile());
-    }
-
-    /**
      * @param int $dirPermissions
      */
     public function setDirPermissions(int $dirPermissions) : void
@@ -531,16 +464,12 @@ abstract class BaseDaemon
     }
 
     /**
-     * @param int $pid
      */
-    protected function childrenProcess($pid = -1) {
-        if (!is_int($pid)) {
-            $pid = -1;
-        }
-        $childPid = pcntl_waitpid($pid, $status, WNOHANG);
+    protected function removeChildProcess() {
+        $childPid = pcntl_waitpid(-1, $status, WNOHANG);
         while ($childPid > 0) {
             $this->processes->remove($childPid);
-            $childPid = pcntl_waitpid($pid, $status, WNOHANG);
+            $childPid = pcntl_waitpid(-1, $status, WNOHANG);
         }
     }
 
@@ -555,7 +484,7 @@ abstract class BaseDaemon
                 $this->stopProcess();
                 break;
             case SIGCHLD:
-                $this->childrenProcess();
+                $this->removeChildProcess();
                 break;
         }
     }
@@ -565,22 +494,24 @@ abstract class BaseDaemon
      */
     protected function stopProcess() : void
     {
-        $this->stopProcess = true;
+        if($this->isParent() and count($this->processes->getProcessDetails()) > 0){
+            $this->poolSize = 0;
+            $this->stopProcess = $this->killAllChildrenProcesses();
+        }
     }
 
-    public function killAllChildrenProcesses() : bool
+    protected function killAllChildrenProcesses() : bool
     {
         foreach ($this->processes->getProcessDetails() as $processDetails) {
-            if ($processDetails->pid() > 0) {
-                for ($k = 50; $k || !50; $k--) {
-                    if (!posix_kill($processDetails->pid(), SIGTERM)) {
-                        $this->processes->remove($processDetails->pid());
-                        continue 2;
-                    }
-                    sleep(1);
+            while (true) {
+                if (posix_kill($processDetails->pid(), SIGTERM)) {
+                    $this->processes->remove($processDetails->pid());
+                    break;
                 }
+                sleep(1);
             }
         }
+
         return true;
     }
 }

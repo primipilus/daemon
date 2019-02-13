@@ -5,7 +5,6 @@ class TestChildDaemon extends \primipilus\daemon\BaseDaemon
 
     /**
      * @throws \primipilus\daemon\exceptions\FailureForkProcessException
-     * @throws \primipilus\daemon\exceptions\InvalidOptionException
      * @throws Exception
      */
     protected function process() : void
