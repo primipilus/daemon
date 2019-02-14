@@ -45,11 +45,9 @@ abstract class BaseDaemon
     /** @var int */
     private $poolSize = 0;
     /** @var ProcessCollection */
-    private $processes;
-    /** @var bool */
-    private $parent = true;
-    /** @var  */
-    private $childNumber;
+    private $subProcesses;
+    /** @var int */
+    private $serialNumber = 0;
 
     /**
      * BaseDaemon constructor.
@@ -66,7 +64,15 @@ abstract class BaseDaemon
                 throw new InvalidOptionException('option ' . $option . ' is invalid');
             }
         }
-        $this->processes = new ProcessCollection($this->poolSize);
+        $this->subProcesses = new ProcessCollection($this->poolSize);
+    }
+
+    /**
+     * @return int
+     */
+    public function serialNumber() : int
+    {
+        return $this->serialNumber;
     }
 
     /**
@@ -199,16 +205,26 @@ abstract class BaseDaemon
      * @param int $attempts
      * @return bool
      */
-    public function stopPid(int $pid, int $attempts = 50) : bool
+    public function stopPid(int $pid, int $attempts = 0) : bool
     {
         if ($pid > 0) {
-            for ($k = $attempts; $k || !$attempts; $k--) {
-                if (!posix_kill($pid, SIGTERM)) {
-                    return true;
+            if ($attempts > 0) {
+                for ($k = $attempts; $k || !$attempts; $k--) {
+                    if (!posix_kill($pid, SIGTERM)) {
+                        return true;
+                    }
+                    sleep(1);
                 }
-                sleep(1);
+            } else {
+                while (true) {
+                    if (!posix_kill($pid, SIGTERM)) {
+                        return true;
+                    }
+                    sleep(1);
+                }
             }
         }
+
         return false;
     }
 
@@ -385,7 +401,7 @@ abstract class BaseDaemon
      */
     public function isParent() : bool
     {
-        return $this->parent;
+        return 0 === $this->serialNumber;
     }
 
     /**
@@ -406,16 +422,28 @@ abstract class BaseDaemon
     }
 
     /**
+     * @return ProcessCollection
+     */
+    public function subProcesses() : ProcessCollection
+    {
+        return $this->subProcesses;
+    }
+
+    /**
      * @throws FailureForkProcessException
      */
-    protected function forkChild()
+    protected function forkChild() : bool
     {
-        $pid = $this->fork();
-        if ($pid === 0) {
-            $this->parent = false;
-        } else {
-            $this->processes->add(new Process($this->processes->getNextId(), $pid));
+        if ($serialNumber = $this->subProcesses->getNextId()) {
+            $pid = $this->fork();
+            if ($pid === 0) {
+                $this->serialNumber = $serialNumber;
+            } else {
+                return $this->subProcesses->add(new Process($serialNumber, $pid));
+            }
         }
+
+        return false;
     }
 
     /**
@@ -486,7 +514,7 @@ abstract class BaseDaemon
      */
     protected function stopProcess() : void
     {
-        if ($this->isParent() and count($this->processes->getElements()) > 0) {
+        if ($this->isParent() and count($this->subProcesses->getElements()) > 0) {
             $this->poolSize = 0;
             $this->stopProcess = $this->killAllChildrenProcesses();
         }
@@ -497,10 +525,10 @@ abstract class BaseDaemon
      */
     protected function killAllChildrenProcesses() : bool
     {
-        foreach ($this->processes->getElements() as $processDetails) {
+        foreach ($this->subProcesses->getElements() as $processDetails) {
             while (true) {
                 if (posix_kill($processDetails->pid(), SIGTERM)) {
-                    $this->processes->removeByPid($processDetails->pid());
+                    $this->subProcesses->removeByPid($processDetails->pid());
                     break;
                 }
                 sleep(1);
@@ -516,7 +544,7 @@ abstract class BaseDaemon
     {
         $childPid = pcntl_waitpid(-1, $status, WNOHANG);
         while ($childPid > 0) {
-            $this->processes->removeByPid($childPid);
+            $this->subProcesses->removeByPid($childPid);
             $childPid = pcntl_waitpid(-1, $status, WNOHANG);
         }
     }

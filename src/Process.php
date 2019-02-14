@@ -10,19 +10,19 @@ namespace primipilus\daemon;
 final class Process
 {
     /** @var int */
-    protected $id;
+    protected $serialNumber;
     /** @var int process id pid */
     protected $pid;
 
     /**
      * The constructor
      *
-     * @param int $id
+     * @param int $serialNumber
      * @param int $pid
      */
-    public function __construct(int $id, int $pid)
+    public function __construct(int $serialNumber, int $pid)
     {
-        $this->id = $id;
+        $this->serialNumber = $serialNumber;
         $this->pid = $pid;
     }
 
@@ -31,9 +31,9 @@ final class Process
      *
      * @return int
      */
-    public function id()
+    public function serialNumber()
     {
-        return $this->id;
+        return $this->serialNumber;
     }
 
     /**

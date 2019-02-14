@@ -13,7 +13,7 @@ final class ProcessCollection
     /** @var Process[] the details */
     public $elements = [];
     /** @var int max limit of elements */
-    private $idsMap = [];
+    private $serialNumbers = [];
 
     /**
      * ProcessCollection constructor.
@@ -21,7 +21,7 @@ final class ProcessCollection
      */
     public function __construct(int $limit)
     {
-        $this->idsMap = array_fill(0, $limit, 0);
+        $this->serialNumbers = array_fill(0, $limit, 0);
     }
 
     /**
@@ -33,8 +33,8 @@ final class ProcessCollection
      */
     public function add(Process $element) : bool
     {
-        if ($this->isFreeId($element->id())) {
-            $this->idsMap[$element->id()] = 1;
+        if ($this->isFreeSerialNumber($element->serialNumber())) {
+            $this->serialNumbers[$element->serialNumber()] = 1;
             $this->elements[$element->pid()] = $element;
             return true;
         }
@@ -54,11 +54,12 @@ final class ProcessCollection
 
     public function getNextId() : ?int
     {
-        foreach ($this->idsMap as $id => $mark) {
+        foreach ($this->serialNumbers as $id => $mark) {
             if (!$mark) {
                 return $id;
             }
         }
+
         return null;
     }
 
@@ -73,6 +74,14 @@ final class ProcessCollection
     }
 
     /**
+     * @return int
+     */
+    public function count() : int
+    {
+        return \count($this->elements);
+    }
+
+    /**
      * @param int $pid
      * @return Process
      */
@@ -84,7 +93,7 @@ final class ProcessCollection
 
         $removed = $this->elements[$pid];
         unset($this->elements[$pid]);
-        $this->idsMap[$removed->id()] = 0;
+        $this->serialNumbers[$removed->serialNumber()] = 0;
 
         return $removed;
     }
@@ -98,11 +107,11 @@ final class ProcessCollection
     }
 
     /**
-     * @param int $id
+     * @param int $serialNumber
      * @return bool
      */
-    private function isFreeId(int $id) : bool
+    private function isFreeSerialNumber(int $serialNumber) : bool
     {
-        return (bool)$this->idsMap[$id];
+        return (bool)$this->serialNumbers[$serialNumber];
     }
 }
