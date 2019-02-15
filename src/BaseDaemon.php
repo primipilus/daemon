@@ -432,12 +432,13 @@ abstract class BaseDaemon
     /**
      * @throws FailureForkProcessException
      */
-    protected function forkChild() : bool
+    final protected function forkChild() : bool
     {
         if ($serialNumber = $this->subProcesses->getNextId()) {
             $pid = $this->fork();
             if ($pid === 0) {
                 $this->serialNumber = $serialNumber;
+                return true;
             } else {
                 return $this->subProcesses->add(new Process($serialNumber, $pid));
             }
