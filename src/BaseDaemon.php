@@ -446,6 +446,7 @@ abstract class BaseDaemon
             $pid = $this->fork();
             if ($pid === 0) {
                 $this->serialNumber = $serialNumber;
+                $this->subProcesses = new ProcessCollection(0);
                 return true;
             } else {
                 return $this->subProcesses->add(new Process($serialNumber, $pid));
