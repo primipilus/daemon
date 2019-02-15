@@ -430,6 +430,14 @@ abstract class BaseDaemon
     }
 
     /**
+     * @return int
+     */
+    public function poolSize() : int
+    {
+        return $this->poolSize;
+    }
+
+    /**
      * @throws FailureForkProcessException
      */
     final protected function forkChild() : bool
