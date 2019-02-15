@@ -549,4 +549,12 @@ abstract class BaseDaemon
             $childPid = pcntl_waitpid(-1, $status, WNOHANG);
         }
     }
+
+    /**
+     * @param int $poolSize
+     */
+    private function setPoolSize(int $poolSize) : void
+    {
+        $this->poolSize = $poolSize;
+    }
 }
