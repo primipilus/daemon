@@ -442,7 +442,8 @@ abstract class BaseDaemon
      */
     final protected function forkChild() : bool
     {
-        if ($serialNumber = $this->subProcesses->getNextId()) {
+        $serialNumber = $this->subProcesses->getNextId();
+        if (null !== $serialNumber) {
             $pid = $this->fork();
             if ($pid === 0) {
                 $this->serialNumber = $serialNumber;
