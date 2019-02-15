@@ -523,9 +523,13 @@ abstract class BaseDaemon
      */
     protected function stopProcess() : void
     {
-        if ($this->isParent() and count($this->subProcesses->getElements()) > 0) {
-            $this->poolSize = 0;
-            $this->stopProcess = $this->killAllChildrenProcesses();
+        $this->poolSize = 0;
+        if ($this->isParent()) {
+            if ($this->subProcesses->count()) {
+                $this->stopProcess = $this->killAllChildrenProcesses();
+            }
+        } else {
+            $this->stopProcess = true;
         }
     }
 
