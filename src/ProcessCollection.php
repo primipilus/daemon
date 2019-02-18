@@ -39,7 +39,7 @@ final class ProcessCollection
             return true;
         }
 
-        return null;
+        return false;
     }
 
     /**
@@ -85,7 +85,7 @@ final class ProcessCollection
      * @param int $pid
      * @return Process
      */
-    public function remove(int $pid) : Process
+    public function remove(int $pid) : ?Process
     {
         if (!isset($this->elements[$pid]) && !array_key_exists($pid, $this->elements)) {
             return null;
@@ -110,8 +110,8 @@ final class ProcessCollection
      * @param int $serialNumber
      * @return bool
      */
-    private function isFreeSerialNumber(int $serialNumber) : bool
+    public function isFreeSerialNumber(int $serialNumber) : bool
     {
-        return (bool)$this->serialNumbers[$serialNumber];
+        return !(bool)$this->serialNumbers[$serialNumber];
     }
 }

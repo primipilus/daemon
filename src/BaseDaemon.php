@@ -46,8 +46,8 @@ abstract class BaseDaemon
     private $poolSize = 0;
     /** @var ProcessCollection */
     private $subProcesses;
-    /** @var int */
-    private $serialNumber = 0;
+    /** @var ?int */
+    private $serialNumber;
 
     /**
      * BaseDaemon constructor.
@@ -68,9 +68,9 @@ abstract class BaseDaemon
     }
 
     /**
-     * @return int
+     * @return int|null
      */
-    public function serialNumber() : int
+    public function serialNumber() : ?int
     {
         return $this->serialNumber;
     }
@@ -242,7 +242,7 @@ abstract class BaseDaemon
         if ($this->isActive()) {
             throw new DaemonAlreadyRunException();
         }
-        if (!$this->daemonize) {
+        if (!$this->daemonize()) {
             $this->process();
             $this->afterStop();
             $this->end();
@@ -274,7 +274,7 @@ abstract class BaseDaemon
                 $this->process();
                 $this->dispatch();
             }
-        } catch (\Exception|\Error $e) {
+        } catch (\Throwable $e) {
             $this->putErrorLog($e);
         }
         $this->afterStop();
@@ -401,7 +401,7 @@ abstract class BaseDaemon
      */
     public function isParent() : bool
     {
-        return 0 === $this->serialNumber;
+        return null === $this->serialNumber;
     }
 
     /**
@@ -442,15 +442,17 @@ abstract class BaseDaemon
      */
     final protected function forkChild() : bool
     {
-        $serialNumber = $this->subProcesses->getNextId();
-        if (null !== $serialNumber) {
-            $pid = $this->fork();
-            if ($pid === 0) {
-                $this->serialNumber = $serialNumber;
-                $this->subProcesses = new ProcessCollection(0);
-                return true;
-            } else {
-                return $this->subProcesses->add(new Process($serialNumber, $pid));
+        if ($this->daemonize() && $this->poolSize > 0) {
+            $serialNumber = $this->subProcesses->getNextId();
+            if (null !== $serialNumber) {
+                $pid = $this->fork();
+                if ($pid === 0) {
+                    $this->serialNumber = $serialNumber;
+                    $this->subProcesses = new ProcessCollection(0);
+                    return true;
+                } else {
+                    return $this->subProcesses->add(new Process($serialNumber, $pid));
+                }
             }
         }
 
@@ -536,15 +538,13 @@ abstract class BaseDaemon
      */
     protected function killAllChildrenProcesses() : bool
     {
-        foreach ($this->subProcesses->getElements() as $processDetails) {
-            while (true) {
-                if (posix_kill($processDetails->pid(), SIGTERM)) {
-                    $this->subProcesses->removeByPid($processDetails->pid());
-                    break;
-                }
-                sleep(1);
+        do {
+            foreach ($this->subProcesses->getElements() as $process) {
+                posix_kill($process->pid(), SIGTERM);
             }
-        }
+            sleep(1);
+            $this->removeChildProcess();
+        } while ($this->subProcesses->count());
 
         return true;
     }
@@ -555,7 +555,7 @@ abstract class BaseDaemon
     {
         $childPid = pcntl_waitpid(-1, $status, WNOHANG);
         while ($childPid > 0) {
-            $this->subProcesses->removeByPid($childPid);
+            $this->subProcesses->remove($childPid);
             $childPid = pcntl_waitpid(-1, $status, WNOHANG);
         }
     }

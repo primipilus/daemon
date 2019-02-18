@@ -11,7 +11,7 @@ final class Process
 {
     /** @var int */
     protected $serialNumber;
-    /** @var int process id pid */
+    /** @var int process pid */
     protected $pid;
 
     /**
