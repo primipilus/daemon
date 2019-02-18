@@ -5,7 +5,7 @@ Composer install
 ----------------
 
 ```bash
-composer require "primipilus/daemon:~1.0"
+composer require "primipilus/daemon:~2.0"
 ```
 
 Usage
