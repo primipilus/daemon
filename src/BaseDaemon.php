@@ -543,7 +543,7 @@ abstract class BaseDaemon
                 posix_kill($process->pid(), SIGTERM);
             }
             sleep(1);
-            $this->removeChildProcess();
+            $this->dispatch();
         } while ($this->subProcesses->count());
 
         return true;
