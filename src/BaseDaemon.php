@@ -393,7 +393,8 @@ abstract class BaseDaemon
      */
     protected function putErrorLog($message) : void
     {
-        file_put_contents($this->errorLog(), (string)$message . PHP_EOL, FILE_APPEND);
+        file_put_contents($this->errorLog(),
+            date('Y-m-d H:i:s') . ' [' . $this->pid() . ']' . (string)$message . PHP_EOL, FILE_APPEND);
     }
 
     /**
@@ -442,13 +443,14 @@ abstract class BaseDaemon
      */
     final protected function forkChild() : bool
     {
-        if ($this->daemonize() && $this->poolSize > 0) {
+        if ($this->daemonize() && $this->isParent() && $this->poolSize > 0) {
             $serialNumber = $this->subProcesses->getNextId();
             if (null !== $serialNumber) {
                 $pid = $this->fork();
                 if ($pid === 0) {
                     $this->serialNumber = $serialNumber;
                     $this->subProcesses = new ProcessCollection(0);
+                    $this->setPid((int)getmypid());
                     return true;
                 } else {
                     return $this->subProcesses->add(new Process($serialNumber, $pid));
@@ -543,7 +545,7 @@ abstract class BaseDaemon
                 posix_kill($process->pid(), SIGTERM);
             }
             sleep(1);
-            $this->dispatch();
+            $this->removeChildProcess();
         } while ($this->subProcesses->count());
 
         return true;
