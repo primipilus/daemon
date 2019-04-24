@@ -45,6 +45,15 @@ final class ProcessCollection
     }
 
     /**
+     * @param int $serialNumber
+     * @return bool
+     */
+    public function isFreeSerialNumber(int $serialNumber) : bool
+    {
+        return !(bool)$this->serialNumbers[$serialNumber];
+    }
+
+    /**
      * Checks whether the collection is empty (contains no elements).
      *
      * @return bool TRUE if the collection is empty, FALSE otherwise.
@@ -106,14 +115,5 @@ final class ProcessCollection
     public function getPids() : array
     {
         return array_keys($this->elements);
-    }
-
-    /**
-     * @param int $serialNumber
-     * @return bool
-     */
-    public function isFreeSerialNumber(int $serialNumber) : bool
-    {
-        return !(bool)$this->serialNumbers[$serialNumber];
     }
 }

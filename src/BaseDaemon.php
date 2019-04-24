@@ -79,14 +79,6 @@ abstract class BaseDaemon
     }
 
     /**
-     * @return bool
-     */
-    public function daemonize() : bool
-    {
-        return $this->daemonize;
-    }
-
-    /**
      * @throws DaemonAlreadyRunException
      * @throws DaemonNotActiveException
      * @throws FailureForkProcessException
@@ -130,8 +122,8 @@ abstract class BaseDaemon
     private function isActive() : bool
     {
         if (!$this->pid() && file_exists($this->pidFile())) {
-                $this->setPidFromPidFile();
-                if (!$this->pid()) {
+            $this->setPidFromPidFile();
+            if (!$this->pid()) {
                 throw new FailureGetPidFileException("Failure ge pid from file {$this->pidFile()}");
             }
         }
@@ -282,6 +274,14 @@ abstract class BaseDaemon
         $this->end();
     }
 
+    /**
+     * @return bool
+     */
+    public function daemonize() : bool
+    {
+        return $this->daemonize;
+    }
+
     abstract protected function process() : void;
 
     /**
@@ -392,7 +392,8 @@ abstract class BaseDaemon
     protected function putErrorLog(string $message) : void
     {
         file_put_contents($this->errorLog(),
-            (new DateTimeImmutable())->format('[Y-m-d H:i:s] [')  . $this->pid() . '] ' . $message . PHP_EOL, FILE_APPEND);
+            (new DateTimeImmutable())->format('[Y-m-d H:i:s] [') . $this->pid() . '] ' . $message . PHP_EOL,
+            FILE_APPEND);
     }
 
     /**
@@ -442,7 +443,7 @@ abstract class BaseDaemon
      */
     final protected function forkChild() : bool
     {
-        if ($this->daemonize() && $this->isParent() && $this->poolSize > 0) {
+        if ($this->daemonize() && $this->isParent() && $this->poolSize() > 0) {
             $serialNumber = $this->subProcesses->getNextId();
             if (null !== $serialNumber) {
                 $pid = $this->fork();
@@ -559,7 +560,7 @@ abstract class BaseDaemon
     /**
      *
      */
-    protected function removeChildProcess() : void
+    private function removeChildProcess() : void
     {
         $childPid = pcntl_waitpid(-1, $status, WNOHANG);
         while ($childPid > 0) {
@@ -568,6 +569,7 @@ abstract class BaseDaemon
         }
     }
 
+    /** @noinspection PhpUnusedPrivateMethodInspection */
     /**
      * @param int $poolSize
      */
