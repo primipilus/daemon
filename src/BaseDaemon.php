@@ -2,6 +2,7 @@
 
 namespace primipilus\daemon;
 
+use DateTimeImmutable;
 use primipilus\daemon\exceptions\DaemonAlreadyRunException;
 use primipilus\daemon\exceptions\DaemonNotActiveException;
 use primipilus\daemon\exceptions\FailureForkProcessException;
@@ -11,6 +12,8 @@ use primipilus\daemon\exceptions\FailureOpenPidFileException;
 use primipilus\daemon\exceptions\FailureStopException;
 use primipilus\daemon\exceptions\FailureWritePidFileException;
 use primipilus\daemon\exceptions\InvalidOptionException;
+use RuntimeException;
+use Throwable;
 
 /**
  * Class BaseDaemon
@@ -46,7 +49,7 @@ abstract class BaseDaemon
     private $poolSize = 0;
     /** @var ProcessCollection */
     private $subProcesses;
-    /** @var ?int */
+    /** @var int|null */
     private $serialNumber;
 
     /**
@@ -59,7 +62,7 @@ abstract class BaseDaemon
         foreach ($options as $option => $value) {
             $method = 'set' . $option;
             if (method_exists($this, $method)) {
-                call_user_func([$this, $method], $value);
+                $this->$method($value);
             } else {
                 throw new InvalidOptionException('option ' . $option . ' is invalid');
             }
@@ -114,9 +117,9 @@ abstract class BaseDaemon
                 return true;
             }
             throw new FailureStopException('pid: ' . $this->pid());
-        } else {
-            throw new DaemonNotActiveException('Daemon ' . $this->name() . ' not active');
         }
+
+        throw new DaemonNotActiveException('Daemon ' . $this->name() . ' not active');
     }
 
     /**
@@ -124,20 +127,15 @@ abstract class BaseDaemon
      * @throws FailureGetPidFileException
      * @throws InvalidOptionException
      */
-    final private function isActive() : bool
+    private function isActive() : bool
     {
-        if (!$this->pid()) {
-            if (file_exists($this->pidFile())) {
+        if (!$this->pid() && file_exists($this->pidFile())) {
                 $this->setPidFromPidFile();
                 if (!$this->pid()) {
-                    throw new FailureGetPidFileException();
-                }
+                throw new FailureGetPidFileException("Failure ge pid from file {$this->pidFile()}");
             }
         }
-        if ($this->pid() && posix_kill($this->pid(), 0)) {
-            return true;
-        }
-        return false;
+        return $this->pid() && posix_kill($this->pid(), 0);
     }
 
     /**
@@ -154,7 +152,7 @@ abstract class BaseDaemon
      */
     public function pidFile() : string
     {
-        if (is_null($this->pidFile)) {
+        if (null === $this->pidFile) {
             $this->pidFile = $this->runtimeDir() . '/' . $this->name() . '.pid';
         }
         return $this->pidFile;
@@ -166,7 +164,7 @@ abstract class BaseDaemon
      */
     public function runtimeDir() : string
     {
-        if (is_null($this->runtimeDir)) {
+        if (null === $this->runtimeDir) {
             throw new InvalidOptionException('option runtimeDir is invalid');
         }
         return $this->runtimeDir;
@@ -177,7 +175,7 @@ abstract class BaseDaemon
      */
     public function name() : string
     {
-        if (is_null($this->name)) {
+        if (null === $this->name) {
             $this->name = implode('.', array_reverse(explode('\\', static::class)));
         }
         return $this->name;
@@ -188,7 +186,7 @@ abstract class BaseDaemon
      */
     protected function setPidFromPidFile() : void
     {
-        $pid = file_get_contents($this->pidFile());
+        $pid = (int)file_get_contents($this->pidFile());
         $this->setPid($pid);
     }
 
@@ -240,7 +238,7 @@ abstract class BaseDaemon
     public function start() : void
     {
         if ($this->isActive()) {
-            throw new DaemonAlreadyRunException();
+            throw new DaemonAlreadyRunException("Daemon `{$this->name()}` already run`");
         }
         if (!$this->daemonize()) {
             $this->process();
@@ -257,14 +255,14 @@ abstract class BaseDaemon
         }
         $this->setPid((int)getmypid());
         if (!$this->pid()) {
-            throw new FailureGetPidException();
+            throw new FailureGetPidException('Failure get pid ');
         }
         $this->savePid();
 
         $this->setMainProcess();
 
         $this->setErrorLog();
-        $GLOBALS['STDIN'] = fopen('/dev/null', 'r');
+        $GLOBALS['STDIN'] = fopen('/dev/null', 'rb');
         $GLOBALS['STDOUT'] = fopen('/dev/null', 'ab');
         $this->signals();
 
@@ -274,11 +272,11 @@ abstract class BaseDaemon
                 $this->process();
                 $this->dispatch();
             }
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $this->putErrorLog($e);
         }
-        $this->afterStop();
         if ($this->isParent()) {
+            $this->afterStop();
             $this->removePidFile();
         }
         $this->end();
@@ -294,7 +292,7 @@ abstract class BaseDaemon
     }
 
     /**
-     * end of process
+     * End of process
      */
     protected function end() : void
     {
@@ -308,8 +306,8 @@ abstract class BaseDaemon
     final protected function fork() : int
     {
         $processId = pcntl_fork();
-        if (-1 == $processId) {
-            throw new FailureForkProcessException();
+        if (-1 === $processId) {
+            throw new FailureForkProcessException('Failure fork process');
         }
         return $processId;
     }
@@ -321,7 +319,7 @@ abstract class BaseDaemon
      */
     protected function savePid() : void
     {
-        if ($handle = @fopen($this->pidFile(), 'w')) {
+        if ($handle = @fopen($this->pidFile(), 'wb')) {
             if (@flock($handle, LOCK_EX)) {
                 $result = @fwrite($handle, $this->pid());
                 @flock($handle, LOCK_UN);
@@ -331,10 +329,10 @@ abstract class BaseDaemon
                 }
             }
             @fclose($handle);
-            throw new FailureWritePidFileException();
-        } else {
-            throw new FailureOpenPidFileException();
+            throw new FailureWritePidFileException("Failure write pid to file {$this->pidFile()}");
         }
+
+        throw new FailureOpenPidFileException("Failure open pid file {$this->pidFile()}");
     }
 
     /**
@@ -388,13 +386,13 @@ abstract class BaseDaemon
     }
 
     /**
-     * @param mixed $message
+     * @param string $message
      * @throws InvalidOptionException
      */
-    protected function putErrorLog($message) : void
+    protected function putErrorLog(string $message) : void
     {
         file_put_contents($this->errorLog(),
-            date('Y-m-d H:i:s') . ' [' . $this->pid() . ']' . (string)$message . PHP_EOL, FILE_APPEND);
+            (new DateTimeImmutable())->format('[Y-m-d H:i:s] [')  . $this->pid() . '] ' . $message . PHP_EOL, FILE_APPEND);
     }
 
     /**
@@ -406,7 +404,7 @@ abstract class BaseDaemon
     }
 
     /**
-     * remove file with pid
+     * Remove file with pid
      * @throws InvalidOptionException
      */
     protected function removePidFile() : void
@@ -431,7 +429,7 @@ abstract class BaseDaemon
     }
 
     /**
-     * @return int
+     * @return int max count of sub processes
      */
     public function poolSize() : int
     {
@@ -439,6 +437,7 @@ abstract class BaseDaemon
     }
 
     /**
+     * @return bool
      * @throws FailureForkProcessException
      */
     final protected function forkChild() : bool
@@ -452,9 +451,9 @@ abstract class BaseDaemon
                     $this->subProcesses = new ProcessCollection(0);
                     $this->setPid((int)getmypid());
                     return true;
-                } else {
-                    return $this->subProcesses->add(new Process($serialNumber, $pid));
                 }
+
+                return $this->subProcesses->add(new Process($serialNumber, $pid));
             }
         }
 
@@ -479,7 +478,11 @@ abstract class BaseDaemon
         if (!file_exists($this->runtimeDir)) {
             $mask = umask();
             umask(0);
-            mkdir($this->runtimeDir, $this->dirPermissions(), true);
+            if (!mkdir($concurrentDirectory = $this->runtimeDir, $this->dirPermissions(),
+                    true) && !is_dir($concurrentDirectory)) {
+                umask($mask);
+                throw new RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+            }
             umask($mask);
         }
     }
@@ -512,8 +515,10 @@ abstract class BaseDaemon
      * @param int   $signalNumber
      * @param mixed $signalInfo
      */
-    protected function signalHandler(int $signalNumber, $signalInfo) : void
-    {
+    protected function signalHandler(
+        int $signalNumber,
+        /** @noinspection PhpUnusedParameterInspection */ $signalInfo
+    ) : void {
         switch ($signalNumber) {
             case SIGTERM:
                 $this->stopProcess();
@@ -525,7 +530,7 @@ abstract class BaseDaemon
     }
 
     /**
-     *
+     * Stop current daemon
      */
     protected function stopProcess() : void
     {
@@ -552,8 +557,9 @@ abstract class BaseDaemon
     }
 
     /**
+     *
      */
-    protected function removeChildProcess()
+    protected function removeChildProcess() : void
     {
         $childPid = pcntl_waitpid(-1, $status, WNOHANG);
         while ($childPid > 0) {

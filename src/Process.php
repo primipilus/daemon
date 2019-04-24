@@ -31,7 +31,7 @@ final class Process
      *
      * @return int
      */
-    public function serialNumber()
+    public function serialNumber() : int
     {
         return $this->serialNumber;
     }
@@ -41,7 +41,7 @@ final class Process
      *
      * @return int
      */
-    public function pid()
+    public function pid() : int
     {
         return $this->pid;
     }

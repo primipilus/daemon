@@ -2,6 +2,8 @@
 
 namespace primipilus\daemon;
 
+use function count;
+
 /**
  * Class ProcessDetailsCollection
  *
@@ -12,8 +14,8 @@ final class ProcessCollection
 
     /** @var Process[] the details */
     public $elements = [];
-    /** @var int max limit of elements */
-    private $serialNumbers = [];
+    /** @var int[] max limit of elements */
+    private $serialNumbers;
 
     /**
      * ProcessCollection constructor.
@@ -47,7 +49,7 @@ final class ProcessCollection
      *
      * @return bool TRUE if the collection is empty, FALSE otherwise.
      */
-    public function isEmpty()
+    public function isEmpty() : bool
     {
         return empty($this->elements);
     }
@@ -78,7 +80,7 @@ final class ProcessCollection
      */
     public function count() : int
     {
-        return \count($this->elements);
+        return count($this->elements);
     }
 
     /**
@@ -87,7 +89,7 @@ final class ProcessCollection
      */
     public function remove(int $pid) : ?Process
     {
-        if (!isset($this->elements[$pid]) && !array_key_exists($pid, $this->elements)) {
+        if (!array_key_exists($pid, $this->elements) && !isset($this->elements[$pid])) {
             return null;
         }
 
