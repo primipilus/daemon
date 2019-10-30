@@ -37,6 +37,8 @@ abstract class BaseDaemon
     protected $pid = 0;
     /** @var bool */
     protected $daemonize = true;
+    /** @var bool */
+    protected $foreground = false;
     /** @var string */
     protected $runtimeDir;
     /** @var string */
@@ -232,6 +234,20 @@ abstract class BaseDaemon
         if ($this->isActive()) {
             throw new DaemonAlreadyRunException("Daemon `{$this->name()}` already run`");
         }
+
+        if ($this->foreground()) {
+            try {
+                while (!$this->isStopProcess()) {
+                    $this->process();
+                    $this->dispatch();
+                }
+            } catch (Throwable $e) {
+                $this->putErrorLog($e);
+            }
+
+            $this->end();
+        }
+
         if (!$this->daemonize()) {
             $this->process();
             $this->afterStop();
@@ -280,6 +296,11 @@ abstract class BaseDaemon
     public function daemonize() : bool
     {
         return $this->daemonize;
+    }
+
+    public function foreground() : bool
+    {
+        return $this->foreground;
     }
 
     abstract protected function process() : void;
@@ -467,6 +488,14 @@ abstract class BaseDaemon
     protected function setDaemonize(bool $daemonize) : void
     {
         $this->daemonize = $daemonize;
+    }
+
+    /**
+     * @param bool $foreground
+     */
+    protected function setForeground(bool $foreground) : void
+    {
+        $this->foreground = $foreground;
     }
 
     /**
