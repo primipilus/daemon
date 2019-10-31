@@ -20,10 +20,15 @@ use Throwable;
  *
  * options:
  *  runtimeDir: string (required)
+ *   - Set directory to place logs and pid files
  *  daemonize: bool
+ *   - Run daemonized in background. You can stop it by method BaseDaemon::stop()
+ *  foreground: bool
+ *   - Endless run in foreground without daemonize
  *  name: string
- *  dirPermissions: string
- *
+ *   - Name your daemon to determine who is who. Used for pid and log files.
+ *  dirPermissions: int
+ *   - runtimeDir directory will be created with this umask
  * @package primipilus\daemon
  */
 abstract class BaseDaemon
@@ -113,7 +118,7 @@ abstract class BaseDaemon
             throw new FailureStopException('pid: ' . $this->pid());
         }
 
-        throw new DaemonNotActiveException('Daemon ' . $this->name() . ' not active');
+        throw new DaemonNotActiveException('Daemon ' . $this->name() . ' is not active');
     }
 
     /**
@@ -126,7 +131,7 @@ abstract class BaseDaemon
         if (!$this->pid() && file_exists($this->pidFile())) {
             $this->setPidFromPidFile();
             if (!$this->pid()) {
-                throw new FailureGetPidFileException("Failure ge pid from file {$this->pidFile()}");
+                throw new FailureGetPidFileException("Failure get pid from file {$this->pidFile()}");
             }
         }
         return $this->pid() && posix_kill($this->pid(), 0);
@@ -232,7 +237,7 @@ abstract class BaseDaemon
     public function start() : void
     {
         if ($this->isActive()) {
-            throw new DaemonAlreadyRunException("Daemon `{$this->name()}` already run`");
+            throw new DaemonAlreadyRunException("Daemon `{$this->name()}` is already running`");
         }
 
         if ($this->foreground()) {
@@ -263,7 +268,7 @@ abstract class BaseDaemon
         }
         $this->setPid((int)getmypid());
         if (!$this->pid()) {
-            throw new FailureGetPidException('Failure get pid ');
+            throw new FailureGetPidException('Failure get pid');
         }
         $this->savePid();
 
